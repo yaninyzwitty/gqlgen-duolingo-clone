@@ -6,34 +6,195 @@ package graph
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"math/big"
 
 	"github.com/yaninyzwitty/gqlgen-duolingo-clone/graph/model"
 )
 
-// CreateTodo is the resolver for the createTodo field.
-func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
-	randNumber, _ := rand.Int(rand.Reader, big.NewInt(100))
-	todo := &model.Todo{
-		Text: input.Text,
-		ID:   fmt.Sprintf("T%d", randNumber),
-		User: &model.User{ID: input.UserID, Name: "user " + input.UserID},
-	}
-	r.todos = append(r.todos, todo)
-	return todo, nil
+// Lesson is the resolver for the lesson field.
+func (r *challengeResolver) Lesson(ctx context.Context, obj *model.Challenge) (*model.Lesson, error) {
+	panic(fmt.Errorf("not implemented: Lesson - lesson"))
 }
 
-// Todos is the resolver for the todos field.
-func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
-	return r.todos, nil
+// Type is the resolver for the type field.
+func (r *challengeResolver) Type(ctx context.Context, obj *model.Challenge) (model.ChallengeType, error) {
+	panic(fmt.Errorf("not implemented: Type - type"))
 }
 
-// User is the resolver for the user field.
-func (r *todoResolver) User(ctx context.Context, obj *model.Todo) (*model.User, error) {
-	return &model.User{ID: obj.UserID, Name: "user " + obj.UserID}, nil
+// Units is the resolver for the units field.
+func (r *courseResolver) Units(ctx context.Context, obj *model.Course) ([]*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: Units - units"))
 }
+
+// Edges is the resolver for the edges field.
+func (r *courseConnectionResolver) Edges(ctx context.Context, obj *model.CourseConnection) ([]*model.CourseEdge, error) {
+	panic(fmt.Errorf("not implemented: Edges - edges"))
+}
+
+// PageInfo is the resolver for the pageInfo field.
+func (r *courseConnectionResolver) PageInfo(ctx context.Context, obj *model.CourseConnection) (*model.PageInfo, error) {
+	panic(fmt.Errorf("not implemented: PageInfo - pageInfo"))
+}
+
+// Node is the resolver for the node field.
+func (r *courseEdgeResolver) Node(ctx context.Context, obj *model.CourseEdge) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: Node - node"))
+}
+
+// Unit is the resolver for the unit field.
+func (r *lessonResolver) Unit(ctx context.Context, obj *model.Lesson) (*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: Unit - unit"))
+}
+
+// AddCourse is the resolver for the addCourse field.
+func (r *mutationResolver) AddCourse(ctx context.Context, title string, imageSrc string) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: AddCourse - addCourse"))
+}
+
+// UpdateCourse is the resolver for the updateCourse field.
+func (r *mutationResolver) UpdateCourse(ctx context.Context, id string, title *string, imageSrc *string) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: UpdateCourse - updateCourse"))
+}
+
+// DeleteCourse is the resolver for the deleteCourse field.
+func (r *mutationResolver) DeleteCourse(ctx context.Context, id string) (*bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteCourse - deleteCourse"))
+}
+
+// AddUnit is the resolver for the addUnit field.
+func (r *mutationResolver) AddUnit(ctx context.Context, title string, description string, courseID string, order int32) (*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: AddUnit - addUnit"))
+}
+
+// UpdateUnit is the resolver for the updateUnit field.
+func (r *mutationResolver) UpdateUnit(ctx context.Context, id string, title *string, description *string, order *int32) (*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: UpdateUnit - updateUnit"))
+}
+
+// DeleteUnit is the resolver for the deleteUnit field.
+func (r *mutationResolver) DeleteUnit(ctx context.Context, id string) (*bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteUnit - deleteUnit"))
+}
+
+// AddLesson is the resolver for the addLesson field.
+func (r *mutationResolver) AddLesson(ctx context.Context, title string, unitID string, order int32) (*model.Lesson, error) {
+	panic(fmt.Errorf("not implemented: AddLesson - addLesson"))
+}
+
+// UpdateLesson is the resolver for the updateLesson field.
+func (r *mutationResolver) UpdateLesson(ctx context.Context, id string, title *string, order *int32) (*model.Lesson, error) {
+	panic(fmt.Errorf("not implemented: UpdateLesson - updateLesson"))
+}
+
+// DeleteLesson is the resolver for the deleteLesson field.
+func (r *mutationResolver) DeleteLesson(ctx context.Context, id string) (*bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteLesson - deleteLesson"))
+}
+
+// AddChallenge is the resolver for the addChallenge field.
+func (r *mutationResolver) AddChallenge(ctx context.Context, lessonID string, typeArg model.ChallengeType, question string, order int32) (*model.Challenge, error) {
+	panic(fmt.Errorf("not implemented: AddChallenge - addChallenge"))
+}
+
+// UpdateChallenge is the resolver for the updateChallenge field.
+func (r *mutationResolver) UpdateChallenge(ctx context.Context, id string, typeArg *model.ChallengeType, question *string, order *int32) (*model.Challenge, error) {
+	panic(fmt.Errorf("not implemented: UpdateChallenge - updateChallenge"))
+}
+
+// DeleteChallenge is the resolver for the deleteChallenge field.
+func (r *mutationResolver) DeleteChallenge(ctx context.Context, id string) (*bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteChallenge - deleteChallenge"))
+}
+
+// AddUserProgress is the resolver for the addUserProgress field.
+func (r *mutationResolver) AddUserProgress(ctx context.Context, userID string, userName string, activeCourseID *string, hearts int32, points int32) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: AddUserProgress - addUserProgress"))
+}
+
+// UpdateUserProgress is the resolver for the updateUserProgress field.
+func (r *mutationResolver) UpdateUserProgress(ctx context.Context, userID string, userName *string, activeCourseID *string, hearts *int32, points *int32) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: UpdateUserProgress - updateUserProgress"))
+}
+
+// DeleteUserProgress is the resolver for the deleteUserProgress field.
+func (r *mutationResolver) DeleteUserProgress(ctx context.Context, userID string) (*bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteUserProgress - deleteUserProgress"))
+}
+
+// UpsertUserProgress is the resolver for the upsertUserProgress field.
+func (r *mutationResolver) UpsertUserProgress(ctx context.Context, courseID int32) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: UpsertUserProgress - upsertUserProgress"))
+}
+
+// ReduceHearts is the resolver for the reduceHearts field.
+func (r *mutationResolver) ReduceHearts(ctx context.Context, challengeID int32) (*model.UserProgressResponse, error) {
+	panic(fmt.Errorf("not implemented: ReduceHearts - reduceHearts"))
+}
+
+// RefillHearts is the resolver for the refillHearts field.
+func (r *mutationResolver) RefillHearts(ctx context.Context) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: RefillHearts - refillHearts"))
+}
+
+// UpsertChallengeProgress is the resolver for the upsertChallengeProgress field.
+func (r *mutationResolver) UpsertChallengeProgress(ctx context.Context, challengeID int32) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: UpsertChallengeProgress - upsertChallengeProgress"))
+}
+
+// Courses is the resolver for the courses field.
+func (r *queryResolver) Courses(ctx context.Context, limit *int32, offset *int32) ([]*model.Course, error) {
+	panic(fmt.Errorf("not implemented: Courses - courses"))
+}
+
+// Course is the resolver for the course field.
+func (r *queryResolver) Course(ctx context.Context, id string) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: Course - course"))
+}
+
+// Units is the resolver for the units field.
+func (r *queryResolver) Units(ctx context.Context, limit *int32, offset *int32) ([]*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: Units - units"))
+}
+
+// Unit is the resolver for the unit field.
+func (r *queryResolver) Unit(ctx context.Context, id string) (*model.Unit, error) {
+	panic(fmt.Errorf("not implemented: Unit - unit"))
+}
+
+// PaginatedCourses is the resolver for the paginatedCourses field.
+func (r *queryResolver) PaginatedCourses(ctx context.Context, first *int32, after *string) (*model.CourseConnection, error) {
+	panic(fmt.Errorf("not implemented: PaginatedCourses - paginatedCourses"))
+}
+
+// Course is the resolver for the course field.
+func (r *unitResolver) Course(ctx context.Context, obj *model.Unit) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: Course - course"))
+}
+
+// ActiveCourse is the resolver for the activeCourse field.
+func (r *userProgressResolver) ActiveCourse(ctx context.Context, obj *model.UserProgress) (*model.Course, error) {
+	panic(fmt.Errorf("not implemented: ActiveCourse - activeCourse"))
+}
+
+// UserProgress is the resolver for the userProgress field.
+func (r *userProgressResponseResolver) UserProgress(ctx context.Context, obj *model.UserProgressResponse) (*model.UserProgress, error) {
+	panic(fmt.Errorf("not implemented: UserProgress - userProgress"))
+}
+
+// Challenge returns ChallengeResolver implementation.
+func (r *Resolver) Challenge() ChallengeResolver { return &challengeResolver{r} }
+
+// Course returns CourseResolver implementation.
+func (r *Resolver) Course() CourseResolver { return &courseResolver{r} }
+
+// CourseConnection returns CourseConnectionResolver implementation.
+func (r *Resolver) CourseConnection() CourseConnectionResolver { return &courseConnectionResolver{r} }
+
+// CourseEdge returns CourseEdgeResolver implementation.
+func (r *Resolver) CourseEdge() CourseEdgeResolver { return &courseEdgeResolver{r} }
+
+// Lesson returns LessonResolver implementation.
+func (r *Resolver) Lesson() LessonResolver { return &lessonResolver{r} }
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
@@ -41,9 +202,24 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-// Todo returns TodoResolver implementation.
-func (r *Resolver) Todo() TodoResolver { return &todoResolver{r} }
+// Unit returns UnitResolver implementation.
+func (r *Resolver) Unit() UnitResolver { return &unitResolver{r} }
 
+// UserProgress returns UserProgressResolver implementation.
+func (r *Resolver) UserProgress() UserProgressResolver { return &userProgressResolver{r} }
+
+// UserProgressResponse returns UserProgressResponseResolver implementation.
+func (r *Resolver) UserProgressResponse() UserProgressResponseResolver {
+	return &userProgressResponseResolver{r}
+}
+
+type challengeResolver struct{ *Resolver }
+type courseResolver struct{ *Resolver }
+type courseConnectionResolver struct{ *Resolver }
+type courseEdgeResolver struct{ *Resolver }
+type lessonResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-type todoResolver struct{ *Resolver }
+type unitResolver struct{ *Resolver }
+type userProgressResolver struct{ *Resolver }
+type userProgressResponseResolver struct{ *Resolver }
