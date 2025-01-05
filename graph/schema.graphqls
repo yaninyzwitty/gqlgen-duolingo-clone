@@ -1,28 +1,126 @@
-# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
-
-type Todo {
+type Course {
   id: ID!
-  text: String!
-  done: Boolean!
-  user: User!
+  title: String!
+  imageSrc: String!
+  units: [Unit]
 }
 
-type User {
+type Unit {
   id: ID!
-  name: String!
+  title: String!
+  description: String!
+  course: Course!
+  order: Int!
+}
+
+type Lesson {
+  id: ID!
+  title: String!
+  unit: Unit!
+  order: Int!
+}
+
+enum ChallengeType {
+  SELECT
+  ASSIST
+}
+
+type Challenge {
+  id: ID!
+  lesson: Lesson!
+  type: ChallengeType!
+  question: String!
+  order: Int!
+}
+
+type UserProgress {
+  userId: String!
+  userName: String!
+  activeCourse: Course
+  hearts: Int!
+  points: Int!
+}
+
+type PageInfo {
+  endCursor: String!
+  hasNextPage: Boolean!
+}
+
+type CourseConnection {
+  edges: [CourseEdge]
+  pageInfo: PageInfo!
+}
+
+type CourseEdge {
+  cursor: String!
+  node: Course!
+}
+
+type UserProgressResponse {
+  error: String
+  userProgress: UserProgress
 }
 
 type Query {
-  todos: [Todo!]!
-}
+  courses(limit: Int, offset: Int): [Course]
+  course(id: ID!): Course
+  units(limit: Int, offset: Int): [Unit]
+  unit(id: ID!): Unit
 
-input NewTodo {
-  text: String!
-  userId: String!
+  # Cursor-based pagination
+  paginatedCourses(first: Int, after: String): CourseConnection
 }
 
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
+  addCourse(title: String!, imageSrc: String!): Course
+  updateCourse(id: ID!, title: String, imageSrc: String): Course
+  deleteCourse(id: ID!): Boolean
+
+  addUnit(
+    title: String!
+    description: String!
+    courseId: ID!
+    order: Int!
+  ): Unit
+  updateUnit(id: ID!, title: String, description: String, order: Int): Unit
+  deleteUnit(id: ID!): Boolean
+
+  addLesson(title: String!, unitId: ID!, order: Int!): Lesson
+  updateLesson(id: ID!, title: String, order: Int): Lesson
+  deleteLesson(id: ID!): Boolean
+
+  addChallenge(
+    lessonId: ID!
+    type: ChallengeType!
+    question: String!
+    order: Int!
+  ): Challenge
+  updateChallenge(
+    id: ID!
+    type: ChallengeType
+    question: String
+    order: Int
+  ): Challenge
+  deleteChallenge(id: ID!): Boolean
+
+  addUserProgress(
+    userId: String!
+    userName: String!
+    activeCourseId: ID
+    hearts: Int!
+    points: Int!
+  ): UserProgress
+  updateUserProgress(
+    userId: String!
+    userName: String
+    activeCourseId: ID
+    hearts: Int
+    points: Int
+  ): UserProgress
+  deleteUserProgress(userId: String!): Boolean
+
+  upsertUserProgress(courseId: Int!): UserProgress
+  reduceHearts(challengeId: Int!): UserProgressResponse
+  refillHearts: UserProgress
+  upsertChallengeProgress(challengeId: Int!): UserProgress
 }
