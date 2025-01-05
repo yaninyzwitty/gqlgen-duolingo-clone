@@ -1,0 +1,12 @@
+server:
+  port: 8080
+  timeout: 20s
+database:
+  user: ian
+  host: postgres # Database host
+  database: witty # Database name
+  port: 5432 # Database port
+  sslmode: disable # SSL mode (disabled for local dev)
+  max_retries: 30 # Max retries for DB connectio
+
+
