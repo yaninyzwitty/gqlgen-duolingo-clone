@@ -153,8 +153,43 @@ models:
     model:
       - github.com/99designs/gqlgen/graphql.Int
       - github.com/99designs/gqlgen/graphql.Int64
-  Todo:
+  UserProgress:
     fields:
-      user:
+      activeCourse:
         resolver: true
+  UserProgressResponse:
+    fields:
+      userProgress:
+        resolver: true
+  Unit:
+    fields:
+      course:
+        resolver: true
+  Lesson:
+    fields:
+      unit:
+        resolver: true
+  Course:
+    fields:
+      units:
+        resolver: true
+  CourseEdge:
+    fields:
+      node:
+        resolver: true
+  CourseConnection:
+    fields:
+      edges:
+        resolver: true
+      pageInfo:
+        resolver: true
+  Challenge:
+    fields:
+      lesson:
+        resolver: true
+      type:
+        resolver: true
+    
+  
+
       
