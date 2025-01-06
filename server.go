@@ -71,7 +71,11 @@ func main() {
 
 	mux := chi.NewRouter()
 	mux.Use(middleware.Logger)
-	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+
+	resolvers := &graph.Resolver{
+		Pool: pool,
+	}
+	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: resolvers}))
 
 	srv.AddTransport(transport.Options{})
 	srv.AddTransport(transport.GET{})
