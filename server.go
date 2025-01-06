@@ -18,7 +18,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/yaninyzwitty/gqlgen-duolingo-clone/graph"
-	"github.com/yaninyzwitty/gqlgen-duolingo-clone/internal/database"
 	"github.com/yaninyzwitty/gqlgen-duolingo-clone/pkg"
 )
 
@@ -43,23 +42,6 @@ func main() {
 
 	if s := os.Getenv("DB_PASSWORD"); s != "" {
 		password = s
-	}
-
-	dbConfig := database.NewDbConfig(cfg.Database.User, password, cfg.Database.Host, cfg.Database.Port, cfg.Database.Database, cfg.Database.SSLMode)
-	pool, err := dbConfig.MakeNewPgxPool(ctx, 30)
-	if err != nil {
-		slog.Error("failed to create pgx pool", "error", err)
-		os.Exit(1)
-
-	}
-
-	defer pool.Close()
-
-	err = dbConfig.Ping(ctx)
-	if err != nil {
-		slog.Error("failed to ping database", "error", err)
-		os.Exit(1)
-
 	}
 
 	mux := chi.NewRouter()
@@ -87,7 +69,7 @@ func main() {
 	stopCH := make(chan os.Signal, 1)
 	signal.Notify(stopCH, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		slog.Info("server is listening on :" + fmt.Sprintf("%d", cfg.Server.Port))
+		slog.Info("SERVER  starting on :" + fmt.Sprintf("%d", cfg.Server.Port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("failed to start server")
 			os.Exit(1)

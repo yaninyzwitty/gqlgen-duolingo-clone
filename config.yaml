@@ -1,6 +1,6 @@
 server:
   port: 8080
-  timeout: 20s
+  timeout: 30s
 database:
   user: ian
   host: postgres # Database host
