@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/yaninyzwitty/gqlgen-duolingo-clone/graph/model"
 )
 
@@ -48,22 +50,138 @@ func (r *lessonResolver) Unit(ctx context.Context, obj *model.Lesson) (*model.Un
 
 // AddCourse is the resolver for the addCourse field.
 func (r *mutationResolver) AddCourse(ctx context.Context, title string, imageSrc string) (*model.Course, error) {
-	panic(fmt.Errorf("not implemented: AddCourse - addCourse"))
+	if title == "" || imageSrc == "" {
+		return nil, fmt.Errorf("both title and imageSrc are required")
+
+	}
+
+	var titleRes, imageSrcRes string
+	var id uuid.UUID
+	query := `INSERT INTO courses (title, image_src) VALUES($1, $2) RETURNING id, title, image_src`
+	if err := r.Pool.QueryRow(ctx, query, title, imageSrc).Scan(&id, &titleRes, &imageSrcRes); err != nil {
+		return nil, fmt.Errorf("failed to insert course: %w", err)
+	}
+	return &model.Course{
+		ID:       id.String(),
+		Title:    titleRes,
+		ImageSrc: imageSrcRes,
+		Units:    []*model.Unit{},
+	}, nil
+
 }
 
 // UpdateCourse is the resolver for the updateCourse field.
 func (r *mutationResolver) UpdateCourse(ctx context.Context, id string, title *string, imageSrc *string) (*model.Course, error) {
-	panic(fmt.Errorf("not implemented: UpdateCourse - updateCourse"))
+	courseID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse course id: %w", err)
+	}
+
+	query := "UPDATE courses SET"
+	var args []interface{}
+	argIndex := 1
+
+	if title != nil {
+		query += fmt.Sprintf(" title = $%d,", argIndex)
+		args = append(args, *title)
+		argIndex++
+	}
+
+	if imageSrc != nil {
+		query += fmt.Sprintf(" image_src = $%d,", argIndex)
+		args = append(args, *imageSrc)
+		argIndex++
+	}
+
+	// Ensure at least one field was updated
+	if len(args) == 0 {
+		return nil, fmt.Errorf("no fields to update")
+	}
+
+	// Remove the trailing comma and add the WHERE clause
+	query = query[:len(query)-1] // remove trailing comma
+	query += fmt.Sprintf(" WHERE id = $%d RETURNING id, title, image_src", argIndex)
+	args = append(args, courseID)
+
+	// Execute the query and scan the result
+	var titleRes, imageSrcRes string
+	var courseResID uuid.UUID
+	err = r.Pool.QueryRow(ctx, query, args...).Scan(&courseResID, &titleRes, &imageSrcRes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update course: %w", err)
+	}
+
+	// Return the updated course
+	return &model.Course{
+		ID:       courseResID.String(),
+		Title:    titleRes,
+		ImageSrc: imageSrcRes,
+		Units:    nil, // or provide units if available
+	}, nil
 }
 
 // DeleteCourse is the resolver for the deleteCourse field.
 func (r *mutationResolver) DeleteCourse(ctx context.Context, id string) (*bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteCourse - deleteCourse"))
+	if id == "" {
+		return nil, fmt.Errorf("course id is required")
+	}
+
+	// Parse the course ID
+	courseID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse course id into UUID: %w", err)
+	}
+
+	// Define the DELETE query
+	query := `DELETE FROM courses WHERE id = $1`
+
+	// Execute the DELETE query
+	res, err := r.Pool.Exec(ctx, query, courseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute delete query: %w", err)
+	}
+
+	// Check if the course was found and deleted
+	if res.RowsAffected() == 0 {
+		return nil, fmt.Errorf("course with id %s not found", id)
+	}
+
+	// Return success
+	success := true
+	return &success, nil
 }
 
 // AddUnit is the resolver for the addUnit field.
 func (r *mutationResolver) AddUnit(ctx context.Context, title string, description string, courseID string, order int32) (*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: AddUnit - addUnit"))
+	if title == "" || description == "" || courseID == "" {
+		return nil, fmt.Errorf("title, description, and courseID are required")
+	}
+
+	// Parse the courseID into UUID format
+	courseId, err := uuid.Parse(courseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse the course id into uuid: %w", err)
+	}
+
+	// Insert the new unit into the units table
+	query := `INSERT INTO units (title, description, course_id) VALUES($1, $2, $3) RETURNING id, title, description, course_id, unit_order`
+	var ID, courseIDRes uuid.UUID
+	var titleRes, descriptionRes string
+	var unitOrder int32
+
+	err = r.Pool.QueryRow(ctx, query, title, description, courseId).Scan(&ID, &titleRes, &descriptionRes, &courseIDRes, &unitOrder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert unit: %w", err)
+	}
+
+	// Return the newly created unit
+	return &model.Unit{
+		ID:          ID.String(),
+		Title:       titleRes,
+		Description: descriptionRes,
+		Course:      nil, // You can populate this with the full course if needed
+		Order:       unitOrder,
+	}, nil
 }
 
 // UpdateUnit is the resolver for the updateUnit field.
@@ -168,7 +286,30 @@ func (r *queryResolver) PaginatedCourses(ctx context.Context, first *int32, afte
 
 // Course is the resolver for the course field.
 func (r *unitResolver) Course(ctx context.Context, obj *model.Unit) (*model.Course, error) {
-	panic(fmt.Errorf("not implemented: Course - course"))
+
+	courseID, err := uuid.Parse(obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse course id: %w", err)
+	}
+
+	query := `SELECT id, title, image_src FROM courses WHERE id = $1`
+	var courseIDRes uuid.UUID
+	var title, imageSrc string
+	err = r.Pool.QueryRow(ctx, query, courseID).Scan(&courseIDRes, &title, &imageSrc)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // Return nil if no course found
+		}
+		return nil, fmt.Errorf("failed to get course: %w", err)
+	}
+
+	return &model.Course{
+		ID:       courseIDRes.String(),
+		Title:    title,
+		ImageSrc: imageSrc,
+		Units:    nil, // Units can be populated if needed, add a resolver for them
+	}, nil
+
 }
 
 // ActiveCourse is the resolver for the activeCourse field.
