@@ -7,10 +7,12 @@ package graph
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/yaninyzwitty/gqlgen-duolingo-clone/graph/model"
+	"github.com/yaninyzwitty/gqlgen-duolingo-clone/internal/helpers"
 )
 
 // Lesson is the resolver for the lesson field.
@@ -261,27 +263,255 @@ func (r *mutationResolver) UpsertChallengeProgress(ctx context.Context, challeng
 
 // Courses is the resolver for the courses field.
 func (r *queryResolver) Courses(ctx context.Context, limit *int32, offset *int32) ([]*model.Course, error) {
-	panic(fmt.Errorf("not implemented: Courses - courses"))
+	l := int32(10) // Default limit
+	o := int32(0)  // Default offset
+
+	if limit != nil {
+		l = *limit
+	}
+	if offset != nil {
+		o = *offset
+	}
+
+	query := `
+        SELECT id, title, image_src, created_at
+        FROM courses
+        ORDER BY created_at ASC
+        LIMIT $1 OFFSET $2
+    `
+
+	rows, err := r.Pool.Query(ctx, query, l, o)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get courses: %w", err)
+	}
+	defer rows.Close()
+
+	var courses []*model.Course
+	for rows.Next() {
+		var course model.Course
+		var courseID uuid.UUID
+		var createdAt time.Time
+		if err := rows.Scan(&courseID, &course.Title, &course.ImageSrc, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		courses = append(courses, &model.Course{
+			ID:       courseID.String(),
+			Title:    course.Title,
+			ImageSrc: course.ImageSrc,
+			Units:    nil,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return courses, nil
 }
 
 // Course is the resolver for the course field.
 func (r *queryResolver) Course(ctx context.Context, id string) (*model.Course, error) {
-	panic(fmt.Errorf("not implemented: Course - course"))
+	courseID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse course id: %w", err)
+
+	}
+
+	query := `SELECT id, title, image_src FROM courses WHERE id = $1`
+
+	var ID uuid.UUID
+	var title, imageSrc string
+
+	err = r.Pool.QueryRow(ctx, query, courseID).Scan(&ID, &title, &imageSrc)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // Return nil if no course found
+		}
+		return nil, fmt.Errorf("failed to get course: %w", err)
+
+	}
+
+	return &model.Course{
+		ID:       ID.String(),
+		Title:    title,
+		ImageSrc: imageSrc,
+		Units:    nil,
+	}, nil
+
 }
 
 // Units is the resolver for the units field.
 func (r *queryResolver) Units(ctx context.Context, limit *int32, offset *int32) ([]*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: Units - units"))
+	l := int32(10) // Default limit
+	o := int32(0)  // Default offset
+
+	if limit != nil {
+		l = *limit
+	}
+	if offset != nil {
+		o = *offset
+	}
+
+	query := `
+        SELECT id, title, description, course_id, unit_order, created_at
+        FROM units
+        ORDER BY created_at ASC
+        LIMIT $1 OFFSET $2
+    `
+
+	rows, err := r.Pool.Query(ctx, query, l, o)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query database: %w", err)
+	}
+	defer rows.Close()
+
+	var units []*model.Unit
+
+	for rows.Next() {
+		var unit model.Unit
+		var unitID, courseID uuid.UUID
+		var createdAt time.Time
+		if err := rows.Scan(&unitID, &unit.Title, &unit.Description, &courseID, &unit.Order, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		units = append(units, &model.Unit{
+			ID:          unitID.String(),
+			Title:       unit.Title,
+			Description: unit.Description,
+			Course:      nil, // gqlgen will resolve this field using the resolver function
+			Order:       unit.Order,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return units, nil
 }
 
 // Unit is the resolver for the unit field.
 func (r *queryResolver) Unit(ctx context.Context, id string) (*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: Unit - unit"))
+	unitID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse unit id: %w", err)
+	}
+
+	query := `
+        SELECT
+            id, title, description, course_id, unit_order
+        FROM units
+        WHERE id = $1
+    `
+
+	var ID, courseID uuid.UUID
+	var title, description string
+	var unitOrder int32
+
+	if err := r.Pool.QueryRow(ctx, query, unitID).Scan(&ID, &title, &description, &courseID, &unitOrder); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // Return nil if no unit found
+		}
+		return nil, fmt.Errorf("failed to get unit: %w", err)
+	}
+
+	return &model.Unit{
+		ID:          ID.String(),
+		Title:       title,
+		Description: description,
+		Course:      nil,
+		Order:       unitOrder,
+	}, nil
 }
 
 // PaginatedCourses is the resolver for the paginatedCourses field.
 func (r *queryResolver) PaginatedCourses(ctx context.Context, first *int32, after *string) (*model.CourseConnection, error) {
-	panic(fmt.Errorf("not implemented: PaginatedCourses - paginatedCourses"))
+	limit := int32(10) // Default limit
+	offset := int32(0) // Default offset
+
+	if first != nil {
+		limit = *first
+	}
+
+	if after != nil {
+		decodeOffset, err := helpers.DecodeCursor(*after)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode cursor: %w", err)
+		}
+		offset = decodeOffset
+	}
+
+	query := `
+        SELECT id, title, image_src, created_at
+        FROM courses
+        ORDER BY created_at ASC
+        LIMIT $1 OFFSET $2
+    `
+
+	rows, err := r.Pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query database: %w", err)
+	}
+	defer rows.Close()
+
+	var edges []*model.CourseEdge
+	var lastOffset int32 = offset
+
+	for rows.Next() {
+		var course model.Course
+		var courseID uuid.UUID
+		var createdAt time.Time
+
+		if err := rows.Scan(&courseID, &course.Title, &course.ImageSrc, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		edge := model.CourseEdge{
+			Node: &model.Course{
+				ID:       courseID.String(),
+				Title:    course.Title,
+				ImageSrc: course.ImageSrc,
+				Units:    nil,
+			},
+			Cursor: helpers.EncodeCursor(lastOffset),
+		}
+
+		edges = append(edges, &edge)
+		lastOffset++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	var hasNextPage bool
+
+	nextQuery := `
+        SELECT COUNT(1) > 0
+        FROM courses
+        WHERE created_at > (
+            SELECT created_at
+            FROM courses
+            ORDER BY created_at ASC
+            LIMIT 1 OFFSET $1
+        )
+    `
+	err = r.Pool.QueryRow(ctx, nextQuery, lastOffset).Scan(&hasNextPage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check next page: %w", err)
+	}
+
+	pageInfo := model.PageInfo{
+		HasNextPage: hasNextPage,
+		EndCursor:   helpers.EncodeCursor(lastOffset),
+	}
+
+	return &model.CourseConnection{
+		Edges:    edges,
+		PageInfo: &pageInfo,
+	}, nil
 }
 
 // Course is the resolver for the course field.
