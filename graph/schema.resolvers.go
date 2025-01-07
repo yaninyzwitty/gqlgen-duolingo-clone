@@ -27,7 +27,50 @@ func (r *challengeResolver) Type(ctx context.Context, obj *model.Challenge) (mod
 
 // Units is the resolver for the units field.
 func (r *courseResolver) Units(ctx context.Context, obj *model.Course) ([]*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: Units - units"))
+	courseID, err := uuid.Parse(obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course ID (%s): %w", obj.ID, err)
+	}
+
+	query := `
+	SELECT id, title, description, unit_order
+	FROM units
+	WHERE course_id = $1
+	ORDER BY unit_order ASC
+`
+	rows, err := r.Pool.Query(ctx, query, courseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query units for course %s: %w", obj.ID, err)
+	}
+	defer rows.Close()
+
+	var units []*model.Unit
+	for rows.Next() {
+		var (
+			id          uuid.UUID
+			title       string
+			description string
+			unitOrder   int
+			courseID    uuid.UUID
+		)
+
+		if err := rows.Scan(&id, &title, &description, &unitOrder, &courseID); err != nil {
+			return nil, fmt.Errorf("failed to scan unit row: %w", err)
+		}
+		units = append(units, &model.Unit{
+			ID:          id.String(),
+			Title:       title,
+			Description: description,
+			Course:      nil,
+			Order:       int32(unitOrder),
+		})
+
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+	return units, nil
+
 }
 
 // Edges is the resolver for the edges field.
