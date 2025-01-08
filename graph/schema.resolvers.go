@@ -6,6 +6,7 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -224,34 +225,166 @@ func (r *mutationResolver) AddUnit(ctx context.Context, title string, descriptio
 		ID:          ID.String(),
 		Title:       titleRes,
 		Description: descriptionRes,
-		Course:      nil, // You can populate this with the full course if needed
 		Order:       unitOrder,
 	}, nil
 }
 
 // UpdateUnit is the resolver for the updateUnit field.
 func (r *mutationResolver) UpdateUnit(ctx context.Context, id string, title *string, description *string, order *int32) (*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: UpdateUnit - updateUnit"))
+	unitID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse unit id: %w", err)
+	}
+
+	query := `
+	UPDATE units
+	SET title = COALESCE($1, title),
+		description = COALESCE($2, description),
+		unit_order = COALESCE($3, unit_order)
+	WHERE id = $4
+	RETURNING id, title, description, unit_order, course_id
+	`
+	var ID, CourseID uuid.UUID
+	var unit model.Unit
+
+	err = r.Pool.QueryRow(ctx, query, title, description, order, unitID).Scan(&unit.ID, &unit.Title, &unit.Description, &unit.Order, &CourseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update unit: %w", err)
+	}
+
+	return &model.Unit{
+		ID:          ID.String(),
+		Title:       unit.Title,
+		Description: unit.Description,
+		Course: &model.Course{
+			ID: CourseID.String(),
+		},
+		Order: unit.Order,
+	}, nil
+
 }
 
 // DeleteUnit is the resolver for the deleteUnit field.
 func (r *mutationResolver) DeleteUnit(ctx context.Context, id string) (*bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteUnit - deleteUnit"))
+	if id == "" {
+		return nil, fmt.Errorf("unit id is required")
+	}
+
+	// Parse the ID
+	unitID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse unit id: %w", err)
+	}
+
+	// Delete query with RETURNING for validation
+	query := `DELETE FROM units WHERE id = $1 RETURNING id`
+	var deletedID uuid.UUID
+	err = r.Pool.QueryRow(ctx, query, unitID).Scan(&deletedID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("unit with id %s does not exist", id)
+		}
+		return nil, fmt.Errorf("failed to execute delete query: %w", err)
+	}
+
+	// Return success
+	success := true
+	return &success, nil
 }
 
 // AddLesson is the resolver for the addLesson field.
 func (r *mutationResolver) AddLesson(ctx context.Context, title string, unitID string, order int32) (*model.Lesson, error) {
-	panic(fmt.Errorf("not implemented: AddLesson - addLesson"))
+	if unitID == "" || title == "" {
+		return nil, fmt.Errorf("both unit id and title are required")
+	}
+	if order < 1 {
+		return nil, fmt.Errorf("order must be greater than zero")
+	}
+
+	unitId, err := uuid.Parse(unitID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse unit id to uuid: %w", err)
+	}
+
+	query := `
+    INSERT INTO lessons (title, unit_id, unit_order)
+    VALUES($1, $2, $3)
+    RETURNING id, title, unit_id, unit_order
+    `
+
+	var ID, unitIDFromDB uuid.UUID
+	var lesson model.Lesson
+	err = r.Pool.QueryRow(ctx, query, title, unitId, order).Scan(&ID, &lesson.Title, &unitIDFromDB, &lesson.Order)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert lesson: %w", err)
+	}
+
+	return &model.Lesson{
+		ID:    ID.String(),
+		Title: lesson.Title,
+		Unit: &model.Unit{
+			ID: unitIDFromDB.String(),
+		},
+		Order: lesson.Order,
+	}, nil
 }
 
 // UpdateLesson is the resolver for the updateLesson field.
 func (r *mutationResolver) UpdateLesson(ctx context.Context, id string, title *string, order *int32) (*model.Lesson, error) {
-	panic(fmt.Errorf("not implemented: UpdateLesson - updateLesson"))
+	lessonID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lesson id: %w", err)
+	}
+
+	query := `
+	UPDATE lessons
+	SET title = COALESCE($1, title),
+		unit_order = COALESCE($2, unit_order)
+	WHERE id = $3
+	RETURNING id, title, unit_id, unit_order
+	`
+
+	var ID, unitID uuid.UUID
+	var lesson model.Lesson
+
+	err = r.Pool.QueryRow(ctx, query, title, order, lessonID).Scan(&ID, &lesson.Title, &unitID, &lesson.Order)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update lesson: %w", err)
+	}
+
+	return &model.Lesson{
+		ID:    ID.String(),
+		Title: lesson.Title,
+		Unit: &model.Unit{
+			ID: unitID.String(),
+		},
+		Order: lesson.Order,
+	}, nil
 }
 
 // DeleteLesson is the resolver for the deleteLesson field.
 func (r *mutationResolver) DeleteLesson(ctx context.Context, id string) (*bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteLesson - deleteLesson"))
+	if id == "" {
+		return nil, fmt.Errorf("Lesson id is required")
+	}
+	lessonID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lesson id into uuid: %w", err)
+	}
+
+	query := `DELETE FROM lessons WHERE id = $1 RETURNING id`
+	var ID uuid.UUID
+
+	err = r.Pool.QueryRow(ctx, query, lessonID).Scan(&ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("LESSON with id %s does not exist", id)
+		}
+		return nil, fmt.Errorf("failed to execute delete query: %w", err)
+	}
+	success := true
+	return &success, nil
+
 }
 
 // AddChallenge is the resolver for the addChallenge field.
@@ -580,7 +713,6 @@ func (r *unitResolver) Course(ctx context.Context, obj *model.Unit) (*model.Cour
 		ID:       courseIDRes.String(),
 		Title:    title,
 		ImageSrc: imageSrc,
-		Units:    nil, // Units can be populated if needed, add a resolver for them
 	}, nil
 
 }
