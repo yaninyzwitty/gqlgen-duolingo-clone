@@ -389,17 +389,102 @@ func (r *mutationResolver) DeleteLesson(ctx context.Context, id string) (*bool, 
 
 // AddChallenge is the resolver for the addChallenge field.
 func (r *mutationResolver) AddChallenge(ctx context.Context, lessonID string, typeArg model.ChallengeType, question string, order int32) (*model.Challenge, error) {
-	panic(fmt.Errorf("not implemented: AddChallenge - addChallenge"))
+	if lessonID == "" || !typeArg.IsValid() || question == "" || order < 1 {
+		return nil, fmt.Errorf("lesson id, type, order and question are required")
+	}
+	lessonId, err := uuid.Parse(lessonID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lesson id: %w", err)
+	}
+
+	query := `INSERT INTO challenges (lesson_id, type, question, unit_order) VALUES($1, $2, $3, $4) RETURNING id, lesson_id, type, question, unit_order`
+	var ID, lessonIDRes uuid.UUID
+	var challenge model.Challenge
+
+	err = r.Pool.QueryRow(ctx, query, lessonId, typeArg.String(), question, order).Scan(&ID, &lessonIDRes, &challenge.Type, &challenge.Question, &challenge.Order)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert challenge")
+	}
+	return &model.Challenge{
+		ID: ID.String(),
+		Lesson: &model.Lesson{
+			ID: lessonIDRes.String(),
+		},
+		Type:     challenge.Type,
+		Question: challenge.Question,
+		Order:    challenge.Order,
+	}, nil
+
 }
 
 // UpdateChallenge is the resolver for the updateChallenge field.
 func (r *mutationResolver) UpdateChallenge(ctx context.Context, id string, typeArg *model.ChallengeType, question *string, order *int32) (*model.Challenge, error) {
-	panic(fmt.Errorf("not implemented: UpdateChallenge - updateChallenge"))
+	if id == "" || !typeArg.IsValid() || question == nil || order == nil {
+		return nil, fmt.Errorf("id, type, order and question are required")
+	}
+
+	challengeID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse challege id to uuid, %w", err)
+	}
+
+	query := `
+	UPDATE challenges
+	SET type = COALESCE($1, type),
+		question = COALESCE($2, question)
+		unit_order = COALESCE($3, unit_order)
+	WHERE id = $4
+	RETURNING id, lesson_id, type,  question, unit_order
+	`
+
+	var ID, lessonID uuid.UUID
+	var challenge model.Challenge
+
+	err = r.Pool.QueryRow(ctx, query, typeArg.String(), question, order, challengeID).Scan(&ID, &lessonID, &challenge.Type, &challenge.Question, &challenge.Order)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update challenge: %w", err)
+	}
+	return &model.Challenge{
+		ID: ID.String(),
+		Lesson: &model.Lesson{
+			ID: lessonID.String(),
+		},
+		Type:     challenge.Type,
+		Question: challenge.Question,
+		Order:    challenge.Order,
+	}, nil
+
 }
 
 // DeleteChallenge is the resolver for the deleteChallenge field.
 func (r *mutationResolver) DeleteChallenge(ctx context.Context, id string) (*bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteChallenge - deleteChallenge"))
+	// Validate input
+	if id == "" {
+		return nil, fmt.Errorf("challenge ID is required")
+	}
+
+	// Parse the ID into a UUID
+	challengeID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse challenge ID into UUID: %w", err)
+	}
+
+	// Define the delete query
+	query := `DELETE FROM challenges WHERE id = $1 RETURNING id`
+
+	// Execute the query and capture the returned ID
+	var deletedID uuid.UUID
+	err = r.Pool.QueryRow(ctx, query, challengeID).Scan(&deletedID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("challenge with ID %s does not exist", id)
+		}
+		return nil, fmt.Errorf("failed to delete challenge with ID %s: %w", id, err)
+	}
+
+	// Return success
+	success := true
+	return &success, nil
 }
 
 // AddUserProgress is the resolver for the addUserProgress field.
