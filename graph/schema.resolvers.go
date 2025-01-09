@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,12 +19,44 @@ import (
 
 // Lesson is the resolver for the lesson field.
 func (r *challengeResolver) Lesson(ctx context.Context, obj *model.Challenge) (*model.Lesson, error) {
-	panic(fmt.Errorf("not implemented: Lesson - lesson"))
+	lessonID, err := uuid.Parse(obj.Lesson.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid lesson ID (%s): %w", obj.Lesson.ID, err)
+	}
+
+	query := `
+        SELECT id, title, unit_id, unit_order
+        FROM lessons
+        WHERE id = $1
+    `
+	row := r.Pool.QueryRow(ctx, query, lessonID)
+
+	var (
+		id          uuid.UUID
+		title       string
+		description string
+		language    string
+		lessonOrder int
+	)
+
+	err = row.Scan(&id, &title, &description, &language, &lessonOrder)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lesson %s not found: %w", obj.Lesson.ID, err)
+		}
+		return nil, fmt.Errorf("failed to scan lesson row: %w", err)
+	}
+
+	return &model.Lesson{
+		ID:    id.String(),
+		Title: title,
+		Order: int32(lessonOrder),
+	}, nil
 }
 
 // Type is the resolver for the type field.
 func (r *challengeResolver) Type(ctx context.Context, obj *model.Challenge) (model.ChallengeType, error) {
-	panic(fmt.Errorf("not implemented: Type - type"))
+	return obj.Type, nil
 }
 
 // Units is the resolver for the units field.
@@ -76,22 +109,45 @@ func (r *courseResolver) Units(ctx context.Context, obj *model.Course) ([]*model
 
 // Edges is the resolver for the edges field.
 func (r *courseConnectionResolver) Edges(ctx context.Context, obj *model.CourseConnection) ([]*model.CourseEdge, error) {
-	panic(fmt.Errorf("not implemented: Edges - edges"))
+	return obj.Edges, nil
+
 }
 
 // PageInfo is the resolver for the pageInfo field.
 func (r *courseConnectionResolver) PageInfo(ctx context.Context, obj *model.CourseConnection) (*model.PageInfo, error) {
-	panic(fmt.Errorf("not implemented: PageInfo - pageInfo"))
+	return obj.PageInfo, nil
 }
 
 // Node is the resolver for the node field.
 func (r *courseEdgeResolver) Node(ctx context.Context, obj *model.CourseEdge) (*model.Course, error) {
-	panic(fmt.Errorf("not implemented: Node - node"))
+	return obj.Node, nil
 }
 
 // Unit is the resolver for the unit field.
 func (r *lessonResolver) Unit(ctx context.Context, obj *model.Lesson) (*model.Unit, error) {
-	panic(fmt.Errorf("not implemented: Unit - unit"))
+	unitID, err := uuid.Parse(obj.Unit.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid unit ID (%s): %w", obj.Unit.ID, err)
+	}
+
+	query := `SELECT id, title, description, course_id, unit_order FROM units WHERE id = $1`
+	var unitIDrES, courseID uuid.UUID
+	var unit model.Unit
+	err = r.Pool.QueryRow(ctx, query, unitID).Scan(&unitIDrES, &unit.Title, &unit.Description, &courseID, &unit.Order)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query unit: %w", err)
+	}
+
+	return &model.Unit{
+		ID:          unitIDrES.String(),
+		Title:       unit.Title,
+		Description: unit.Description,
+		Order:       int32(unit.Order),
+	}, nil
+
 }
 
 // AddCourse is the resolver for the addCourse field.
@@ -489,22 +545,161 @@ func (r *mutationResolver) DeleteChallenge(ctx context.Context, id string) (*boo
 
 // AddUserProgress is the resolver for the addUserProgress field.
 func (r *mutationResolver) AddUserProgress(ctx context.Context, userID string, userName string, activeCourseID *string, hearts int32, points int32) (*model.UserProgress, error) {
-	panic(fmt.Errorf("not implemented: AddUserProgress - addUserProgress"))
+	if userID == "" {
+		return nil, fmt.Errorf("user id is required")
+	}
+	if userName == "" {
+		return nil, fmt.Errorf("user name is required")
+	}
+	if activeCourseID == nil {
+		return nil, fmt.Errorf("active course id is required")
+	}
+
+	userId, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user id into uuid: %w", err)
+	}
+
+	activeCourseId, err := uuid.Parse(*activeCourseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse active course id into uuid: %w", err)
+	}
+
+	query := `INSERT INTO user_progress (user_id, user_name, active_course_id, hearts, points) VALUES($1, $2, $3, $4, $5) RETURNING user_id, user_name, active_course_id, hearts, points`
+	var userIDRes, activeCourseIDRes uuid.UUID
+	var userProgress model.UserProgress
+
+	err = r.Pool.QueryRow(ctx, query, userId, userName, activeCourseId, hearts, points).Scan(&userIDRes, &userProgress.UserName, &activeCourseIDRes, &userProgress.Hearts, &userProgress.Points)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert user progress to db: %w", err)
+	}
+
+	return &model.UserProgress{
+		UserID:   userIDRes.String(),
+		UserName: userProgress.UserName,
+		ActiveCourse: &model.Course{
+			ID: activeCourseIDRes.String(),
+		},
+		Hearts: userProgress.Hearts,
+		Points: userProgress.Points,
+	}, nil
 }
 
 // UpdateUserProgress is the resolver for the updateUserProgress field.
 func (r *mutationResolver) UpdateUserProgress(ctx context.Context, userID string, userName *string, activeCourseID *string, hearts *int32, points *int32) (*model.UserProgress, error) {
-	panic(fmt.Errorf("not implemented: UpdateUserProgress - updateUserProgress"))
+	userId, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user id into uuid: %w", err)
+	}
+
+	query := `
+	UPDATE user_progress
+	SET
+		user_name = COALESCE($2, user_name),
+		active_course_id = COALESCE($3, active_course_id),
+		hearts = COALESCE($4, hearts),
+		points = COALESCE($5, points)
+	WHERE user_id = $1
+	RETURNING user_id, user_name, active_course_id, hearts, points
+`
+
+	var activeCourseId *uuid.UUID
+	if activeCourseID != nil {
+		acId, err := uuid.Parse(*activeCourseID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse active course id into uuid: %w", err)
+		}
+		activeCourseId = &acId
+	}
+
+	var updatedUserProgress model.UserProgress
+	var updatedActiveCourseID *uuid.UUID
+	err = r.Pool.QueryRow(ctx, query, userId, userName, activeCourseId, hearts, points).
+		Scan(&updatedUserProgress.UserID, &updatedUserProgress.UserName, &updatedActiveCourseID, &updatedUserProgress.Hearts, &updatedUserProgress.Points)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user progress in db: %w", err)
+	}
+	updatedUserProgress.UserID = userId.String()
+	if updatedActiveCourseID != nil {
+		updatedUserProgress.ActiveCourse = &model.Course{ID: updatedActiveCourseID.String()}
+	} else {
+		updatedUserProgress.ActiveCourse = nil
+	}
+
+	return &updatedUserProgress, nil
 }
 
 // DeleteUserProgress is the resolver for the deleteUserProgress field.
 func (r *mutationResolver) DeleteUserProgress(ctx context.Context, userID string) (*bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteUserProgress - deleteUserProgress"))
+	// Parse the userID into a UUID format
+	userId, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user id into uuid: %w", err)
+	}
+
+	// Prepare the SQL delete query
+	query := `DELETE FROM user_progress WHERE user_id = $1`
+
+	// Execute the query
+	result, err := r.Pool.Exec(ctx, query, userId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete user progress from db: %w", err)
+	}
+
+	// Check how many rows were affected
+	rowsAffected := result.RowsAffected()
+	success := rowsAffected > 0
+
+	return &success, nil
 }
 
 // UpsertUserProgress is the resolver for the upsertUserProgress field.
 func (r *mutationResolver) UpsertUserProgress(ctx context.Context, courseID int32) (*model.UserProgress, error) {
-	panic(fmt.Errorf("not implemented: UpsertUserProgress - upsertUserProgress"))
+	courseIDStr := strconv.Itoa(int(courseID))
+
+	courseIdUUid, err := uuid.Parse(courseIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse course id into uuid: %w", err)
+
+	}
+
+	var (
+		userProgress        model.UserProgress
+		userID, courseIDRes uuid.UUID
+	)
+
+	query := `
+	 SELECT user_id, user_name, hearts, points, active_course_id 
+        FROM user_progress 
+        WHERE active_course_id = $1`
+
+	err = r.Pool.QueryRow(ctx, query, courseIdUUid).Scan(&userID, &userProgress.UserName, &userProgress.Hearts, &userProgress.Points, &courseIDRes)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, err := r.Pool.Exec(ctx, `
+			INSERT INTO user_progress (user_id, user_name, active_course_id, hearts, points) 
+			VALUES ($1, $2, $3, $4, $5)
+		`, "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", "John Doe", courseID, 0, 0) // Fill with proper values
+			if err != nil {
+				return nil, fmt.Errorf("failed to insert user progress: %w", err)
+			}
+
+			userProgress = model.UserProgress{
+				UserID:   "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+				UserName: "John Doe",
+				Hearts:   0,
+				Points:   0,
+			}
+
+		} else {
+			return nil, fmt.Errorf("failed to query user progress: %w", err)
+		}
+
+		return nil, fmt.Errorf("failed to get user progress: %w", err)
+
+	}
+	return &userProgress, nil
+
 }
 
 // ReduceHearts is the resolver for the reduceHearts field.
